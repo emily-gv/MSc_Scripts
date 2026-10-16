@@ -9,10 +9,13 @@ Created on Wed Oct 15 14:38 2026
 
 # conda install -c conda-forge pyedflib
 
+# TODO - add check for info inside of HxB instead of folder existing
+
 from pyedflib import highlevel
 import os
 import shutil
 import numpy as np
+import pandas as pd
 
 # Replace with channels for applicable version of the sleep kits
 CHANNELS = ["SpO2", "Pulse"]
@@ -75,10 +78,7 @@ def sort_edf(parent_folder_to_sort):
             shutil.copy2(original_path, copied_path) # copy2 tries to preserve metadata while copy does not
 
         except Exception as e:
-            message = (
-                f"WARNING: {os.path.basename(s)}: failed to copy."
-                f"{original_name}: {e}"
-            )
+            message = (f"WARNING: {os.path.basename(s)}: failed to copy. >> {original_name}: {e}")
             flagged_folders.append(message)
             continue
 
@@ -138,7 +138,7 @@ def sort_edf(parent_folder_to_sort):
             data = np.column_stack([time] + list(signals))
 
             # Write comma-separated ASCII TXT
-            header = ["Time"] + selected_channels
+            header = ["Time (s)"] + selected_channels
 
             np.savetxt(
                 output_txt,
@@ -149,17 +149,35 @@ def sort_edf(parent_folder_to_sort):
                 comments=""
             )
 
-            print(f"  Saved ASCII TXT: {os.path.basename(output_txt)}")
+            print(f"\tSaved ASCII TXT: {os.path.basename(output_txt)}")
+        except Exception as e:
+            message = (f"{os.path.basename(s)}: failed to process as TXT >> {copied_name}: {e}")
+            flagged_folders.append(message)
+            ## IF CHANNEL VALUE ERROR, just quit script
 
+        try:
+            df = pd.read_csv(output_txt, header=0) # assumes seprated by commas, else add sep='\t'
+            df.to_excel(os.path.join(output_folder,f"{stem}_filtered_data.xlsx"), index=False)
+            print(f"\t\tSaved as XLSX: {os.path.basename(output_edf)}")
+        except Exception as e:
+            message = (f"{os.path.basename(s)}: failed to process as .xlsx >> {copied_name}: {e}")
+            flagged_folders.append(message)
+            continue
+
+        try:
+            df = pd.read_csv(output_txt, header=0) # assumes seprated by commas, else add sep='\t'
+            df.to_csv(os.path.join(output_folder, f"{stem}_Sagatech.csv"),index=False)
+            print(f"\t\t\tSaved as CSV: {os.path.basename(output_edf)}")
         except Exception as e:
             message = (
-                f"{os.path.basename(s)}: failed to process as TXT"
-                f"{copied_name}: {e}"
-            )
+                f"{os.path.basename(s)}: failed to process as .csv >> {copied_name}: {e}")
 
             flagged_folders.append(message)
 
-    # FINAL SUMMARY:
+
+
+
+    # SUMMARY STATS:
     print("\n" + "=" * 60)
     print("BATCH PROCESSING SUMMARY")
     print("=" * 60)
@@ -179,3 +197,4 @@ def sort_edf(parent_folder_to_sort):
     print("=" * 60)
 
 sort_edf("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/EMILY_TESTS")
+# sort_edf("/home/emilygv/Desktop/TESTING_EDF")
