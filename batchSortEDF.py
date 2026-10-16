@@ -158,7 +158,7 @@ def sort_edf(parent_folder_to_sort):
         try:
             df = pd.read_csv(output_txt, header=0) # assumes seprated by commas, else add sep='\t'
             df.to_excel(os.path.join(output_folder,f"{stem}_filtered_data.xlsx"), index=False)
-            print(f"\t\tSaved as XLSX: {os.path.basename(output_edf)}")
+            print(f"\t\tSaved as XLSX: {os.path.basename(s)}")
         except Exception as e:
             message = (f"{os.path.basename(s)}: failed to process as .xlsx >> {copied_name}: {e}")
             flagged_folders.append(message)
@@ -166,8 +166,8 @@ def sort_edf(parent_folder_to_sort):
 
         try:
             df = pd.read_csv(output_txt, header=0) # assumes seprated by commas, else add sep='\t'
-            df.to_csv(os.path.join(output_folder, f"{stem}_Sagatech.csv"),index=False)
-            print(f"\t\t\tSaved as CSV: {os.path.basename(output_edf)}")
+            df.to_csv(os.path.join(output_folder, f"{os.path.basename(s)}_Sagatech.csv"),index=False)
+            print(f"\t\t\tSaved as CSV: {os.path.basename(s)}")
         except Exception as e:
             message = (
                 f"{os.path.basename(s)}: failed to process as .csv >> {copied_name}: {e}")
@@ -195,6 +195,3 @@ def sort_edf(parent_folder_to_sort):
         print("All folders processed without errors.")
 
     print("=" * 60)
-
-sort_edf("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/EMILY_TESTS")
-# sort_edf("/home/emilygv/Desktop/TESTING_EDF")
