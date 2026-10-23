@@ -13,10 +13,19 @@ import os
 import shutil
 import numpy as np
 import pandas as pd
+import re
 
 # Replace with channels for applicable version of the sleep kits
-CHANNELS = ["SpO2", "Pulse"] # Embletta
-# CHANNELS = ["Oximeter", "Pulse"] # Cerebra
+# CHANNELS = ["SpO2", "Pulse"] # Embletta
+CHANNELS = ["Oximeter", "Pulse"] # Cerebra
+
+# Select parent folder naming format:
+# "BIM_ID" = BIM1234 + description (extract BIM1234)
+    # Will append PHASE to file_id(BIM1234_P4)
+# "FULL_NAME" = BIM1234-1 (keep entire folder name)
+
+FOLDER_FORMAT = "BIM_ID"
+PHASE = "P4"
 
 """
 Iterates through parents folder and identifies folders labelled 'BIM...'
@@ -42,8 +51,28 @@ def sort_edf(parent_folder_to_sort):
 
     flagged_folders = []
 
-    # Process each BIM folder (can generalize to non-BIM later)
     for s in subfolders_filtered:
+
+        folder_name = os.path.basename(s)
+
+        # Determine output filename based on the selected folder format
+        if FOLDER_FORMAT == "BIM_ID":
+            match = re.search (r'BIM\d{4}', folder_name)
+
+            if not match:
+                message = f"Skipping invalid BIM folder name: {folder_name}"
+                print(message)
+                flagged_folders.append(message)
+                continue
+
+            file_id = match.group() + f"_{PHASE}" # match.group() returns everything from regex 
+        
+        elif FOLDER_FORMAT == "FULL_NAME":
+            file_id = folder_name
+
+        else:
+            raise ValueError(f"Unknown FOLDER_FORMAT: {FOLDER_FORMAT}")
+
 
         print(f"\nProcessing folder: {os.path.basename(s)}")
 
@@ -76,7 +105,7 @@ def sort_edf(parent_folder_to_sort):
         stem, extension = os.path.splitext(original_name)
 
         # 4. Copy EDF file into HxB
-        copied_name = f"{os.path.basename(s)} Copy" 
+        copied_name = f"{file_id} Copy{extension}" 
         copied_path = os.path.join(output_folder, copied_name)
 
         try:
@@ -106,9 +135,7 @@ def sort_edf(parent_folder_to_sort):
 
                 if matched is None:
                     raise ValueError(
-                        f"Channel '{channel}' not found. "
-                        f"Available channels: {available_channels}"
-                    )
+                        f"Channel '{channel}' not found. Available channels: {available_channels}")
 
                 selected_channels.append(matched)
 
@@ -116,7 +143,7 @@ def sort_edf(parent_folder_to_sort):
             signals, signal_headers, header = highlevel.read_edf(copied_path, ch_names=selected_channels)
 
             # 6. Save filtered EDF in HxB
-            output_edf = os.path.join(output_folder, f"{os.path.basename(s)}_filtered.edf")
+            output_edf = os.path.join(output_folder, f"{file_id}_filtered.edf")
             highlevel.write_edf(output_edf, signals, signal_headers, header)
 
             print(f"Saved filtered EDF: {os.path.basename(output_edf)}")
@@ -140,7 +167,7 @@ def sort_edf(parent_folder_to_sort):
             header = ["Time (s)"] + selected_channels
 
             # Save final CSV file in HxB
-            output_csv = os.path.join(output_folder, f"{os.path.basename(s)}_Sagatech.csv")
+            output_csv = os.path.join(output_folder, f"{file_id}_Sagatech.csv")
             np.savetxt(output_csv,data,fmt=["%.9f"] + ["%.1f"] * len(selected_channels),delimiter=",",header=",".join(header),comments="")
             
             print(f"\tSaved as CSV: {os.path.basename(s)}")
@@ -149,7 +176,7 @@ def sort_edf(parent_folder_to_sort):
             message = (f"{os.path.basename(s)}: failed to process as .csv >> {copied_name}: {e}")
             flagged_folders.append(message)
             continue
-            ## IF CHANNEL VALUE ERROR, just quit script
+
 
     # SUMMARY STATS:
     print("\n" + "=" * 60)
@@ -169,5 +196,6 @@ def sort_edf(parent_folder_to_sort):
     print("=" * 60)
 
 
-sort_edf("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/")
+#sort_edf("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/")
 # sort_edf("/home/emilygv/Desktop/TESTING_EDF")
+sort_edf("/home/emilygv/Desktop/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I Follow-up/BIM_I_Follow-up Prodigy files")
