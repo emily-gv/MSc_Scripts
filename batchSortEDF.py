@@ -6,10 +6,7 @@ Created on Wed Oct 15 14:38 2026
 
 # https://github.com/holgern/pyedflib
 # https://pyedflib.readthedocs.io/en/latest/ref/highlevel.html
-
-# conda install -c conda-forge pyedflib
-
-# TODO - add check for info inside of HxB instead of folder existing
+# Requirements: numpy, pandas, pyedflib,  openpyxl
 
 from pyedflib import highlevel
 import os
@@ -18,11 +15,19 @@ import numpy as np
 import pandas as pd
 
 # Replace with channels for applicable version of the sleep kits
-CHANNELS = ["SpO2", "Pulse"]
-# CHANNELS = ["Oximeter", "Pulse"]
+CHANNELS = ["SpO2", "Pulse"] # Embletta
+# CHANNELS = ["Oximeter", "Pulse"] # Cerebra
 
+"""
+Iterates through parents folder and identifies folders labelled 'BIM...'
+Transfers .EDF/.REC file from into an HxB subfolder, then extracts the specified channels and:
+    1. Creates a new .EDF file with just the filtered channels
+    2. Creates intermediate .txt and .xlsx files
+    3. Creates a final .csv file (named [BIM-ID]_Sagatech.csv)
+
+Script will never delete or overwrite data. If an HxB folder already exists, the BIM-ID is flagged for manual review.
+"""
 def sort_edf(parent_folder_to_sort):
-
     parent_folder = parent_folder_to_sort
     if not os.path.exists(parent_folder):
         print("Parent folder does not exist")
@@ -30,7 +35,7 @@ def sort_edf(parent_folder_to_sort):
 
     # 1: Iterate through all folders starting with BIM
     subfolders = [f.path for f in os.scandir(parent_folder) if f.is_dir()] # tested, good
-    subfolders_filtered = [f for f in subfolders if 'BIM' in f] # tested, good
+    subfolders_filtered = [f for f in subfolders if 'BIM' in os.path.basename(f)] # tested, good
 
     # print(subfolders)
     # print(subfolders_filtered) 
@@ -49,11 +54,8 @@ def sort_edf(parent_folder_to_sort):
             flagged_folders.append(message)
             continue
 
-        os.makedirs(output_folder, exist_ok=True)
-
         # 3. Find EDF and REC files in the BIM folder
         input_files = [f for f in os.scandir(s) if f.is_file() and f.name.lower().endswith((".edf", ".rec"))]
-            ### FLAG ONES WITH MULTIPLE AND IGNORE
 
         # Should only be 1 EDF file per folder. Otherwise, flag and skip
         if len(input_files) == 0:
@@ -66,12 +68,15 @@ def sort_edf(parent_folder_to_sort):
             flagged_folders.append(message)
             continue
 
+        os.makedirs(output_folder, exist_ok=True)
+
+
         original_path = input_files[0]
         original_name = os.path.basename(original_path)
         stem, extension = os.path.splitext(original_name)
 
         # 4. Copy EDF file into HxB
-        copied_name = f"{stem} Copy{extension}" 
+        copied_name = f"{os.path.basename(s)} Copy" 
         copied_path = os.path.join(output_folder, copied_name)
 
         try:
@@ -111,13 +116,10 @@ def sort_edf(parent_folder_to_sort):
             signals, signal_headers, header = highlevel.read_edf(copied_path, ch_names=selected_channels)
 
             # 6. Save filtered EDF in HxB
-            output_edf = os.path.join(output_folder, f"{stem}_filtered.edf")
+            output_edf = os.path.join(output_folder, f"{os.path.basename(s)}_filtered.edf")
             highlevel.write_edf(output_edf, signals, signal_headers, header)
 
             print(f"Saved filtered EDF: {os.path.basename(output_edf)}")
-
-            # 7. Save ASCII TXT in HxB
-            output_txt = os.path.join(output_folder, f"{stem}_filtered_data.txt") 
 
             # Ensure channels have compatible sampling frequencies
                 # 1Hz for newer kits, 3Hz for older kits - SpO2/Oximeter and Pulse
@@ -128,54 +130,26 @@ def sort_edf(parent_folder_to_sort):
                     "Selected channels have different sampling frequencies"
                 )
 
-            # Create time column in seconds
+            # Create time column in seconds and combine with signal data
             sampling_frequency = sampling_frequencies[0]
             num_samples = len(signals[0])
-
             time = np.arange(num_samples) / sampling_frequency
-
-            # Combine time and signal data
             data = np.column_stack([time] + list(signals))
 
-            # Write comma-separated ASCII TXT
+            # Create column headers
             header = ["Time (s)"] + selected_channels
 
-            np.savetxt(
-                output_txt,
-                data,
-                delimiter=",",
-                fmt=["%.9f"] + ["%.6f"] * len(selected_channels),
-                header=",".join(header),
-                comments=""
-            )
+            # Save final CSV file in HxB
+            output_csv = os.path.join(output_folder, f"{os.path.basename(s)}_Sagatech.csv")
+            np.savetxt(output_csv,data,fmt=["%.9f"] + ["%.1f"] * len(selected_channels),delimiter=",",header=",".join(header),comments="")
+            
+            print(f"\tSaved as CSV: {os.path.basename(s)}")
 
-            print(f"\tSaved ASCII TXT: {os.path.basename(output_txt)}")
         except Exception as e:
-            message = (f"{os.path.basename(s)}: failed to process as TXT >> {copied_name}: {e}")
-            flagged_folders.append(message)
-            ## IF CHANNEL VALUE ERROR, just quit script
-
-        try:
-            df = pd.read_csv(output_txt, header=0) # assumes seprated by commas, else add sep='\t'
-            df.to_excel(os.path.join(output_folder,f"{stem}_filtered_data.xlsx"), index=False)
-            print(f"\t\tSaved as XLSX: {os.path.basename(s)}")
-        except Exception as e:
-            message = (f"{os.path.basename(s)}: failed to process as .xlsx >> {copied_name}: {e}")
+            message = (f"{os.path.basename(s)}: failed to process as .csv >> {copied_name}: {e}")
             flagged_folders.append(message)
             continue
-
-        try:
-            df = pd.read_csv(output_txt, header=0) # assumes seprated by commas, else add sep='\t'
-            df.to_csv(os.path.join(output_folder, f"{os.path.basename(s)}_Sagatech.csv"),index=False)
-            print(f"\t\t\tSaved as CSV: {os.path.basename(s)}")
-        except Exception as e:
-            message = (
-                f"{os.path.basename(s)}: failed to process as .csv >> {copied_name}: {e}")
-
-            flagged_folders.append(message)
-
-
-
+            ## IF CHANNEL VALUE ERROR, just quit script
 
     # SUMMARY STATS:
     print("\n" + "=" * 60)
@@ -187,11 +161,13 @@ def sort_edf(parent_folder_to_sort):
 
     if flagged_folders:
         print("\nFolders requiring attention:")
-
         for message in flagged_folders:
             print(f"  - {message}")
-
     else:
         print("All folders processed without errors.")
 
     print("=" * 60)
+
+
+sort_edf("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/")
+# sort_edf("/home/emilygv/Desktop/TESTING_EDF")
