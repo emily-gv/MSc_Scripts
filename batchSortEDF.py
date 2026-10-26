@@ -15,9 +15,13 @@ import numpy as np
 import pandas as pd
 import re
 
+# TODO: can flag to generalize any instance of HxB to whatever metric
+# TODO: save output as txt instead of just printing to terminal
+# TODO: adapt as script for individual folders
+
 # Replace with channels for applicable version of the sleep kits
-# CHANNELS = ["SpO2", "Pulse"] # Embletta
-CHANNELS = ["Oximeter", "Pulse"] # Cerebra
+CHANNELS = ["SpO2", "Pulse"] # Embletta / Prodigy sleep kit
+# CHANNELS = ["Oximeter", "Pulse"] # Cerebra
 
 # Select parent folder naming format:
 # "BIM_ID" = BIM1234 + description (extract BIM1234)
@@ -96,7 +100,16 @@ def sort_edf(parent_folder_to_sort):
 
         # Should only be 1 EDF file per folder. Otherwise, flag and skip
         if len(input_files) == 0:
-            message = f"{os.path.basename(s)}: no EDF/REC files found. Folder skipped"
+            print("\tNo EDF/REC directly in BIM folder; checking subfolders...")
+
+            for item in os.scandir(s):
+                if item.is_dir() and item.name != "HxB":
+                    for subitem in os.scandir(item.path):
+                        if (subitem.is_file() and subitem.name.lower().endswith((".edf", ".rec"))):
+                            input_files.append(subitem.path)
+
+        if len(input_files) == 0:
+            message = f"{os.path.basename(s)}: no EDF/REC files found in BIM folder or a subfolder. Folder skipped"
             flagged_folders.append(message)
             continue
         
@@ -160,7 +173,7 @@ def sort_edf(parent_folder_to_sort):
             else:
                 highlevel.write_edf(output_edf, signals, signal_headers, header)
 
-            print(f"Saved filtered EDF: {os.path.basename(output_edf)}")
+            print(f"\tSaved filtered EDF: {os.path.basename(output_edf)}")
 
             # Ensure channels have compatible sampling frequencies
                 # 1Hz for newer kits, 3Hz for older kits - SpO2/Oximeter and Pulse
@@ -183,14 +196,15 @@ def sort_edf(parent_folder_to_sort):
             # Save final CSV file in HxB
             output_csv = os.path.join(output_folder, f"{file_id}_Sagatech.csv")
             if os.path.exists(output_csv):
-                print(f"CSV already exists; skipping: {output_csv}")
+                print(f"\tCSV already exists,skipping")
+                continue
             else:
                 np.savetxt(output_csv,data,fmt=["%.9f"] + ["%.1f"] * len(selected_channels),delimiter=",",header=",".join(header),comments="")
             
             print(f"\tSaved as CSV: {os.path.basename(s)}")
 
         except Exception as e:
-            message = (f"{os.path.basename(s)}: failed to process as .csv >> {copied_name}: {e}")
+            message = (f"{os.path.basename(s)}: failed to process channels >> {copied_name} \n\t {e}")
             flagged_folders.append(message)
             continue
 
@@ -212,7 +226,4 @@ def sort_edf(parent_folder_to_sort):
 
     print("=" * 60)
 
-
-#sort_edf("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/")
-# sort_edf("/home/emilygv/Desktop/TESTING_EDF")
 sort_edf("/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/BIM II Sleep Night Files")
