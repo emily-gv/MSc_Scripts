@@ -23,8 +23,9 @@ CHANNELS = ["Oximeter", "Pulse"] # Cerebra
 # "BIM_ID" = BIM1234 + description (extract BIM1234)
     # Will append PHASE to file_id(BIM1234_P4)
 # "FULL_NAME" = BIM1234-1 (keep entire folder name)
+# "BIM_II" format = BIM 1234_P#
 
-FOLDER_FORMAT = "BIM_ID"
+FOLDER_FORMAT = "FULL_NAME"
 PHASE = "P4"
 
 """
@@ -70,6 +71,17 @@ def sort_edf(parent_folder_to_sort):
         elif FOLDER_FORMAT == "FULL_NAME":
             file_id = folder_name
 
+        elif FOLDER_FORMAT == "BIM_II": # nvm this is just full name unless you want to disregard whatever is after P#
+            match = re.search(r'BIM \d{4}_P\d{1}', folder_name)
+
+            if not match:
+                message = f"Skipping invalid BIM folder name: {folder_name}"
+                print(message)
+                flagged_folders.append(message)
+                continue
+            
+            file_id = match.group()
+
         else:
             raise ValueError(f"Unknown FOLDER_FORMAT: {FOLDER_FORMAT}")
 
@@ -78,10 +90,6 @@ def sort_edf(parent_folder_to_sort):
 
         # 2. Create HxB subfolder (if it doesn't exist already)
         output_folder = os.path.join(s, "HxB")
-        if os.path.isdir(output_folder):
-            message = (f"Skipping {os.path.basename(s)}: HxB folder already exists")
-            flagged_folders.append(message)
-            continue
 
         # 3. Find EDF and REC files in the BIM folder
         input_files = [f for f in os.scandir(s) if f.is_file() and f.name.lower().endswith((".edf", ".rec"))]
@@ -99,7 +107,6 @@ def sort_edf(parent_folder_to_sort):
 
         os.makedirs(output_folder, exist_ok=True)
 
-
         original_path = input_files[0]
         original_name = os.path.basename(original_path)
         stem, extension = os.path.splitext(original_name)
@@ -108,13 +115,16 @@ def sort_edf(parent_folder_to_sort):
         copied_name = f"{file_id} Copy{extension}" 
         copied_path = os.path.join(output_folder, copied_name)
 
-        try:
-            shutil.copy2(original_path, copied_path) # copy2 tries to preserve metadata while copy does not
+        if not os.path.exists(copied_path):
+            try:
+                shutil.copy2(original_path, copied_path) # copy2 tries to preserve metadata while copy does not
 
-        except Exception as e:
-            message = (f"WARNING: {os.path.basename(s)}: failed to copy. >> {original_name}: {e}")
-            flagged_folders.append(message)
-            continue
+            except Exception as e:
+                message = (f"WARNING: {os.path.basename(s)}: failed to copy. >> {original_name}: {e}")
+                flagged_folders.append(message)
+                continue
+        else:
+            print(f"\tUsing existing copy: {copied_name}")
 
         # 5. Extract channels from the COPY
         try:
@@ -144,7 +154,11 @@ def sort_edf(parent_folder_to_sort):
 
             # 6. Save filtered EDF in HxB
             output_edf = os.path.join(output_folder, f"{file_id}_filtered.edf")
-            highlevel.write_edf(output_edf, signals, signal_headers, header)
+            
+            if os.path.exists(output_edf):
+                print(f"Filtered EDF already exists; skipping: {output_edf}")
+            else:
+                highlevel.write_edf(output_edf, signals, signal_headers, header)
 
             print(f"Saved filtered EDF: {os.path.basename(output_edf)}")
 
@@ -168,7 +182,10 @@ def sort_edf(parent_folder_to_sort):
 
             # Save final CSV file in HxB
             output_csv = os.path.join(output_folder, f"{file_id}_Sagatech.csv")
-            np.savetxt(output_csv,data,fmt=["%.9f"] + ["%.1f"] * len(selected_channels),delimiter=",",header=",".join(header),comments="")
+            if os.path.exists(output_csv):
+                print(f"CSV already exists; skipping: {output_csv}")
+            else:
+                np.savetxt(output_csv,data,fmt=["%.9f"] + ["%.1f"] * len(selected_channels),delimiter=",",header=",".join(header),comments="")
             
             print(f"\tSaved as CSV: {os.path.basename(s)}")
 
@@ -198,4 +215,4 @@ def sort_edf(parent_folder_to_sort):
 
 #sort_edf("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/")
 # sort_edf("/home/emilygv/Desktop/TESTING_EDF")
-sort_edf("/home/emilygv/Desktop/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I Follow-up/BIM_I_Follow-up Prodigy files")
+sort_edf("/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/BIM II Sleep Night Files")
