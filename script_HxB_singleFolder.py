@@ -18,7 +18,7 @@ CHANNELS = ["SpO2", "Pulse"] # Embletta / Prodigy sleep kit
 # No naming convention, since this is one-by-one can manually edit folder names once its run
 # This should be run after fixing whatever issues were flag for invidual folders after runnign script_batchSortEDF.py
 
-folder_to_sort = "/home/emilygv/Desktop/TESTING_EDF/BIM 0322-1"
+folder_to_sort = "/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/BIM II Sleep Night Files/BIM 1022_P1"
 
 def sort_edf_singleFolder(folder_to_sort):
     if not os.path.exists(folder_to_sort):
@@ -138,7 +138,7 @@ def sort_edf_singleFolder(folder_to_sort):
         message = (f"{folder_name}: failed to process channels >> {copied_name} \n\t {e}")
         flagged_folders.append(message)
 
-    print("\nFolder processed without errors!\n")
+    print("\n\tFolder processed without errors!\n")
 
 sort_edf_singleFolder(folder_to_sort)
 
