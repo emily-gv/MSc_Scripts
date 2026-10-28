@@ -9,6 +9,17 @@ import shutil
 
 target_subfolder = "HxB" # name of subfolders containing filtered values
 output_folder_name = "HxB_Compiled" # where all EDF and CSV files will be put
+ignore_folders = [ # Based on manual verification of problem folders from script_batchSortEDF
+    # "BIM 1022_P2,"
+    "BIM 1022_P2",
+    "BIM 1040_P2",
+    "BIM 1057_P1",
+    "BIM 1120_P1",
+    "BIM 1172_P2",
+    "BIM 1057_P1_isthiscorrect"
+]
+
+parent_folder = "/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/BIM II Sleep Night Files"
 
 def get_hxb_files(parent_folder):
     if not os.path.exists(parent_folder):
@@ -16,7 +27,17 @@ def get_hxb_files(parent_folder):
         return
 
     subfolders = [f.path for f in os.scandir(parent_folder) if f.is_dir()] 
-    subfolders_filtered = [f for f in subfolders if 'BIM' in os.path.basename(f)] 
+    subfolders_filtered = [f for f in subfolders if 'BIM' in os.path.basename(f) and os.path.basename(f) not in ignore_folders] 
+
+    # Report ignored folders
+    ignored_found = [
+        os.path.basename(f) for f in subfolders
+        if os.path.basename(f) in ignore_folders
+    ]
+
+    print(f"Folders ignored: {len(ignored_found)}")
+    for folder in ignored_found:
+        print(f"  - {folder}")
 
     output_folder = os.path.join(parent_folder, output_folder_name)
     os.makedirs(output_folder, exist_ok=True)
@@ -42,13 +63,16 @@ def get_hxb_files(parent_folder):
 
         for f in input_files: 
             copied_path = os.path.join(output_folder, f.name)
-            try: 
-                shutil.copy2(f.path, copied_path)
-                print(f"\tCopied: {f.name}")
-            except Exception as e:
-                message = (f"WARNING: {os.path.basename(s)}: failed to copy >> {original_name}: {e}")
-                flagged_folders.append(message)
-                continue
+            if not os.path.exists(copied_path):
+                try: 
+                    shutil.copy2(f.path, copied_path)
+                    print(f"\tCopied: {f.name}")
+                except Exception as e:
+                    message = (f"WARNING: {os.path.basename(s)}: failed to copy >> {original_name}: {e}")
+                    flagged_folders.append(message)
+                    continue
+            else:
+                print(f"\tUsing existing copy: {copied_name}")
 
         # SUMMARY STATS:
     print("\n" + "=" * 60)
@@ -67,5 +91,5 @@ def get_hxb_files(parent_folder):
 
     print("=" * 60)
 
-get_hxb_files("/mnt/med_mplab/BIM Study/Sub Studies/Sleep/PSG/BIM I/BIM_I__PSG_Files (original)/")
+get_hxb_files(parent_folder)
 # get_hxb_files("/home/emilygv/Desktop/TESTING_EDF")
