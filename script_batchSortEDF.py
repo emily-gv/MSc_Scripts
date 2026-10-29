@@ -16,21 +16,17 @@ import pandas as pd
 import re
 
 # TODO: can flag to generalize any instance of HxB to whatever metric
-# TODO: save output as txt instead of just printing to terminal
-# TODO: adapt as script for individual folders
 
 # Replace with channels for applicable version of the sleep kits
-CHANNELS = ["SpO2", "Pulse"] # Embletta / Prodigy sleep kit
-# CHANNELS = ["Oximeter", "Pulse"] # Cerebra
+# CHANNELS = ["SpO2", "Pulse"] # Embletta 
+CHANNELS = ["Oximeter", "Pulse"] # Cerebra / Prodigy sleep kit
 
 # Select parent folder naming format:
-# "BIM_ID" = BIM1234 + description (extract BIM1234)
-    # Will append PHASE to file_id(BIM1234_P4)
 # "FULL_NAME" = BIM1234-1 (keep entire folder name)
-# "BIM_II" format = BIM 1234_P#
+# "BIM_PHASE" format = BIM1234_P#
 
-FOLDER_FORMAT = "FULL_NAME"
-PHASE = "P4"
+FOLDER_FORMAT = "BIM_PHASE"
+OVERWRITE_HXB = False
 
 """
 Iterates through parents folder and identifies folders labelled 'BIM...'
@@ -61,22 +57,11 @@ def sort_edf(parent_folder_to_sort):
         folder_name = os.path.basename(s)
 
         # Determine output filename based on the selected folder format
-        if FOLDER_FORMAT == "BIM_ID":
-            match = re.search (r'BIM\d{4}', folder_name)
-
-            if not match:
-                message = f"Skipping invalid BIM folder name: {folder_name}"
-                print(message)
-                flagged_folders.append(message)
-                continue
-
-            file_id = match.group() + f"_{PHASE}" # match.group() returns everything from regex 
-        
-        elif FOLDER_FORMAT == "FULL_NAME":
+        if FOLDER_FORMAT == "FULL_NAME":
             file_id = folder_name
 
-        elif FOLDER_FORMAT == "BIM_II": # nvm this is just full name unless you want to disregard whatever is after P#
-            match = re.search(r'BIM \d{4}_P\d{1}', folder_name)
+        elif FOLDER_FORMAT == "BIM_PHASE": # nvm this is just full name unless you want to disregard whatever is after P#
+            match = re.search(r'BIM\d{4} - P\d{1}', folder_name)
 
             if not match:
                 message = f"Skipping invalid BIM folder name: {folder_name}"
@@ -92,8 +77,18 @@ def sort_edf(parent_folder_to_sort):
 
         print(f"\nProcessing folder: {os.path.basename(s)}")
 
-        # 2. Create HxB subfolder (if it doesn't exist already)
+        # 2. Create or overwrite HxB subfolder
         output_folder = os.path.join(s, "HxB")
+
+        if os.path.exists(output_folder):
+            if OVERWRITE_HXB:
+                print(f"\tOverwriting existing HxB folder: {output_folder}")
+                shutil.rmtree(output_folder)
+                os.makedirs(output_folder)
+            else:
+                os.makedirs(output_folder, exist_ok=True)
+        else:
+            os.makedirs(output_folder)
 
         # 3. Find EDF and REC files in the BIM folder
         input_files = [f for f in os.scandir(s) if f.is_file() and f.name.lower().endswith((".edf", ".rec"))]
@@ -169,7 +164,7 @@ def sort_edf(parent_folder_to_sort):
             output_edf = os.path.join(output_folder, f"{file_id}_filtered.edf")
             
             if os.path.exists(output_edf):
-                print(f"Filtered EDF already exists; skipping: {output_edf}")
+                print(f"\tFiltered EDF already exists; skipping: {file_id}")
             else:
                 highlevel.write_edf(output_edf, signals, signal_headers, header)
 
@@ -196,12 +191,19 @@ def sort_edf(parent_folder_to_sort):
             # Save final CSV file in HxB
             output_csv = os.path.join(output_folder, f"{file_id}_Sagatech.csv")
             if os.path.exists(output_csv):
-                print(f"\tCSV already exists,skipping")
+                print(f"\tCSV already exists, skipping.")
                 continue
             else:
                 np.savetxt(output_csv,data,fmt=["%.9f"] + ["%.1f"] * len(selected_channels),delimiter=",",header=",".join(header),comments="")
-            
-            print(f"\tSaved as CSV: {os.path.basename(s)}")
+                print(f"\tSaved as CSV: {os.path.basename(s)}")
+
+            # Delete only the temporary EDF copy inside HxB after the CSV exists
+            if os.path.isfile(output_csv) and os.path.isfile(copied_path):
+                try:
+                    os.remove(copied_path)
+                    print(f"\tDeleted HxB EDF copy: {copied_name}")
+                except FileNotFoundError:
+                    print("\tEDF Copy file didn't exist to delete")
 
         except Exception as e:
             message = (f"{os.path.basename(s)}: failed to process channels >> {copied_name} \n\t {e}")
@@ -226,4 +228,5 @@ def sort_edf(parent_folder_to_sort):
 
     print("=" * 60)
 
-sort_edf("/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/BIM II Sleep Night Files")
+sort_edf("/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/2.BIM II_Prodigy_Files Manual2025")
+# sort_edf("/home/emilygv/Desktop/TESTING_EDF")
