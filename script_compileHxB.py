@@ -11,15 +11,9 @@ target_subfolder = "HxB" # name of subfolders containing filtered values
 output_folder_name = "HxB_Compiled" # where all EDF and CSV files will be put
 ignore_folders = [ # Based on manual verification of problem folders from script_batchSortEDF
     # "BIM 1022_P2,"
-    "BIM 1022_P2",
-    "BIM 1040_P2",
-    "BIM 1057_P1",
-    "BIM 1120_P1",
-    "BIM 1172_P2",
-    "BIM 1057_P1_isthiscorrect"
 ]
 
-parent_folder = "/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/BIM II Sleep Night Files"
+parent_folder = ""
 
 def get_hxb_files(parent_folder):
     if not os.path.exists(parent_folder):
@@ -72,7 +66,7 @@ def get_hxb_files(parent_folder):
                     flagged_folders.append(message)
                     continue
             else:
-                print(f"\tUsing existing copy: {copied_name}")
+                print(f"\tUsing existing copy: {copied_path}")
 
         # SUMMARY STATS:
     print("\n" + "=" * 60)
