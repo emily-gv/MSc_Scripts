@@ -12,13 +12,13 @@ import pandas as pd
 import re
 
 # Replace with channels for applicable version of the sleep kits
-CHANNELS = ["SpO2", "Pulse"] # Embletta / Prodigy sleep kit
-# CHANNELS = ["Oximeter", "Pulse"] # Cerebra
+# CHANNELS = ["SpO2", "Pulse"] # Embletta / Prodigy sleep kit
+CHANNELS = ["Oximeter", "Pulse"] # Cerebra
 
 # No naming convention, since this is one-by-one can manually edit folder names once its run
 # This should be run after fixing whatever issues were flag for invidual folders after runnign script_batchSortEDF.py
 
-folder_to_sort = "/mnt/med_mplab/BIM II Study/4. BIM II Sub-Studies/1. Sleep/BIM II Sleep Night Files/BIM 1022_P1"
+folder_to_sort = ""
 
 def sort_edf_singleFolder(folder_to_sort):
     if not os.path.exists(folder_to_sort):
@@ -44,6 +44,8 @@ def sort_edf_singleFolder(folder_to_sort):
                 for subitem in os.scandir(item.path):
                     if (subitem.is_file() and subitem.name.lower().endswith((".edf", ".rec"))):
                         input_files.append(subitem.path)
+    
+    flagged_folders = []
 
     if len(input_files) == 0:
         message = f"{folder_name}: no EDF/REC files found in BIM folder or a subfolder. Folder skipped"
@@ -56,11 +58,15 @@ def sort_edf_singleFolder(folder_to_sort):
     os.makedirs(output_folder, exist_ok=True)
 
     original_path = input_files[0]
+
+    match = re.search(r'BIM\d{4} - P\d{1}', folder_name)
+    file_id = match.group()
+    
     original_name = os.path.basename(original_path)
     stem, extension = os.path.splitext(original_name)
 
     # 4. Copy EDF file into HxB
-    copied_name = f"{folder_name} Copy{extension}" 
+    copied_name = f"{file_id} Copy{extension}" 
     copied_path = os.path.join(output_folder, copied_name)
 
     if not os.path.exists(copied_path):
@@ -100,7 +106,7 @@ def sort_edf_singleFolder(folder_to_sort):
         signals, signal_headers, header = highlevel.read_edf(copied_path, ch_names=selected_channels)
 
         # 6. Save filtered EDF in HxB
-        output_edf = os.path.join(output_folder, f"{folder_name}_filtered.edf")
+        output_edf = os.path.join(output_folder, f"{file_id}_filtered.edf")
         
         if os.path.exists(output_edf):
             print(f"\tFiltered EDF already exists; skipping: {output_edf}")
@@ -127,7 +133,7 @@ def sort_edf_singleFolder(folder_to_sort):
         header = ["Time (s)"] + selected_channels
 
         # Save final CSV file in HxB
-        output_csv = os.path.join(output_folder, f"{folder_name}_Sagatech.csv")
+        output_csv = os.path.join(output_folder, f"{file_id}_Sagatech.csv")
         if os.path.exists(output_csv):
             print(f"\tCSV already exists, skipping")
         else:
@@ -138,7 +144,11 @@ def sort_edf_singleFolder(folder_to_sort):
         message = (f"{folder_name}: failed to process channels >> {copied_name} \n\t {e}")
         flagged_folders.append(message)
 
-    print("\n\tFolder processed without errors!\n")
+    if flagged_folders:
+        for message in flagged_folders:
+            print(f"  - {message}")
+    else:
+        print("Folder processed without errors.")
 
 sort_edf_singleFolder(folder_to_sort)
 
